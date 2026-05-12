@@ -1,122 +1,336 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:convert';
+import 'dart:async';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(const OBDApp());
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
+class OBDApp extends StatelessWidget {
+  const OBDApp({super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
+      title: 'MOBYDICK',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+          scaffoldBackgroundColor: Colors.white,
+          primaryColor: Colors.black
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const HomeScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+BluetoothDevice? globalConnectedDevice;
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
+// --- 1. 메인 화면 (기획안 image_b9ae41.png 반영) ---
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
+class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        leading: const Icon(Icons.menu, color: Colors.black, size: 35),
+        title: const Text("MOBYDICK", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, letterSpacing: 2)),
+        centerTitle: true, backgroundColor: Colors.transparent, elevation: 0,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 15),
+
+            // 상단의 빈 라운드 박스 영역
+            Container(
+              width: double.infinity,
+              height: 140,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: const Color(0xFF707070), width: 3),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.directions_car_filled_outlined,
+                  size: 75,
+                  color: Colors.grey[400],
+                ),
+              ),
+            ),
+            const SizedBox(height: 25),
+
+            // 블루투스 연결 버튼 (+ 모양)
+            InkWell(
+              onTap: () async {
+                await [Permission.bluetoothScan, Permission.bluetoothConnect, Permission.location].request();
+                final device = await Navigator.push(context, MaterialPageRoute(builder: (context) => const BluetoothScanScreen()));
+                if (device != null) setState(() => globalConnectedDevice = device);
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                child: Row(
+                  children: [
+                    Icon(Icons.add, size: 40, color: globalConnectedDevice != null ? Colors.blue : Colors.black),
+                    const SizedBox(width: 15),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            "블루투스 연결",
+                            style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: globalConnectedDevice != null ? Colors.blue : Colors.black
+                            )
+                        ),
+                        if (globalConnectedDevice != null)
+                          const Text("장치 연결됨", style: TextStyle(color: Colors.blue, fontSize: 12)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 35),
+
+            // 기획안 기반 6구 그리드 메뉴 리스트 (4열 구성)
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 4,
+                mainAxisSpacing: 20,
+                crossAxisSpacing: 8,
+                childAspectRatio: 0.75, // 텍스트 짤림 방지용 종횡비 설정
+                children: [
+                  _buildGridItem(Icons.speed, "대시보드", () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => DashboardScreen(device: globalConnectedDevice)));
+                  }),
+                  _buildGridItem(Icons.assignment_outlined, "차량진단", () {
+                    _showToast("차량진단");
+                  }),
+                  _buildGridItem(Icons.route_outlined, "주행 기록", () {
+                    _showToast("주행 기록");
+                  }),
+                  _buildGridItem(Icons.thumb_up_alt_outlined, "연비", () {
+                    _showToast("연비");
+                  }),
+                  _buildGridItem(Icons.explore_outlined, "운전점수", () {
+                    _showToast("운전점수");
+                  }),
+                  _buildGridItem(Icons.assignment_ind_outlined, "성향리포트", () {
+                    _showToast("성향리포트");
+                  }),
+                ],
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+    );
+  }
+
+  // 그리드 전용 아이콘 버튼 빌더
+  Widget _buildGridItem(IconData icon, String title, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 42, color: Colors.black87),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showToast(String menuName) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("$menuName 기능은 준비 중입니다.")),
+    );
+  }
+}
+
+// --- 2. 블루투스 스캔 화면 (기존 코드와 완벽히 동일) ---
+class BluetoothScanScreen extends StatefulWidget {
+  const BluetoothScanScreen({super.key});
+  @override
+  State<BluetoothScanScreen> createState() => _BluetoothScanScreenState();
+}
+
+class _BluetoothScanScreenState extends State<BluetoothScanScreen> {
+  List<ScanResult> scanResults = [];
+  void _startScan() async {
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 5));
+    FlutterBluePlus.scanResults.listen((results) { if (mounted) setState(() => scanResults = results); });
+  }
+  @override
+  void initState() { super.initState(); _startScan(); }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("스캐너 선택")),
+      body: ListView.builder(
+        itemCount: scanResults.length,
+        itemBuilder: (context, index) {
+          final device = scanResults[index].device;
+          return ListTile(
+            title: Text(device.platformName.isEmpty ? "Unknown Device" : device.platformName),
+            subtitle: Text(device.remoteId.toString()),
+            onTap: () async { await device.connect(); Navigator.pop(context, device); },
+          );
+        },
+      ),
+    );
+  }
+}
+
+// --- 3. 통합 대시보드 화면 (기존 코드와 완벽히 동일) ---
+class DashboardScreen extends StatefulWidget {
+  final BluetoothDevice? device;
+  const DashboardScreen({super.key, this.device});
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  double speed = 0, rpm = 0, coolant = 0, iat = 0, load = 0, map = 0;
+  BluetoothCharacteristic? writeChar;
+  BluetoothCharacteristic? notifyChar;
+  StreamSubscription? _valueSubscription;
+  Timer? _timer;
+  String _dataBuffer = "";
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.device != null) { _initRealData(); } else { _initSimulation(); }
+  }
+
+  void _initRealData() async {
+    List<BluetoothService> services = await widget.device!.discoverServices();
+    for (var s in services) {
+      for (var c in s.characteristics) {
+        if (c.properties.write || c.properties.writeWithoutResponse) writeChar = c;
+        if (c.properties.notify || c.properties.indicate) notifyChar = c;
+      }
+    }
+
+    if (notifyChar != null && writeChar != null) {
+      await notifyChar!.setNotifyValue(true);
+      _valueSubscription = notifyChar!.lastValueStream.listen((value) { _parseOBDData(value); });
+
+      await writeChar!.write(utf8.encode("ATZ\r"));
+      await Future.delayed(const Duration(milliseconds: 500));
+      await writeChar!.write(utf8.encode("ATE0\r"));
+      await Future.delayed(const Duration(milliseconds: 200));
+      await writeChar!.write(utf8.encode("ATS0\r"));
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      _timer = Timer.periodic(const Duration(seconds: 1), (t) => _sendCommands());
+    }
+  }
+
+  void _sendCommands() async {
+    if (writeChar == null) return;
+    final pids = ["010C\r", "010D\r", "0105\r", "010F\r", "0104\r", "010B\r"];
+    for (var pid in pids) {
+      await writeChar!.write(utf8.encode(pid));
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
+  void _parseOBDData(List<int> data) {
+    if (data.isEmpty) return;
+    String incoming = utf8.decode(data, allowMalformed: true);
+    _dataBuffer += incoming;
+
+    if (!_dataBuffer.contains(">")) return;
+    String cleanData = _dataBuffer.replaceAll(RegExp(r'[\s\r\n>]'), '').toUpperCase();
+
+    setState(() {
+      try {
+        if (cleanData.contains("410C")) {
+          int start = cleanData.indexOf("410C") + 4;
+          if (cleanData.length >= start + 4) {
+            int a = int.parse(cleanData.substring(start, start + 2), radix: 16);
+            int b = int.parse(cleanData.substring(start + 2, start + 4), radix: 16);
+            double val = ((a * 256) + b) / 4;
+            if (val < 9000) rpm = val;
+          }
+        }
+        if (cleanData.contains("410D")) {
+          int start = cleanData.indexOf("410D") + 4;
+          if (cleanData.length >= start + 2) {
+            double val = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble();
+            if (val < 300) speed = val;
+          }
+        }
+        if (cleanData.contains("4105")) {
+          int start = cleanData.indexOf("4105") + 4;
+          if (cleanData.length >= start + 2) {
+            coolant = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble() - 40;
+          }
+        }
+      } catch (e) {
+        debugPrint("파싱 에러: $e");
+      }
+    });
+    _dataBuffer = "";
+  }
+
+  void _initSimulation() {
+    _timer = Timer.periodic(const Duration(milliseconds: 500), (t) {
+      setState(() { speed = 0; rpm = 750 + (t.tick % 50).toDouble(); coolant = 85; });
+    });
+  }
+
+  @override
+  void dispose() { _timer?.cancel(); _valueSubscription?.cancel(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F4F7),
+      appBar: AppBar(title: Text(widget.device != null ? "실시간 주행 데이터" : "테스트 대시보드"), backgroundColor: Colors.white, elevation: 1),
+      body: GridView.count(
+        padding: const EdgeInsets.all(16), crossAxisCount: 2, mainAxisSpacing: 16, crossAxisSpacing: 16,
+        children: [
+          _buildCard("속도", speed.toStringAsFixed(0), "km/h"),
+          _buildCard("엔진 회전수 (RPM)", rpm.toStringAsFixed(0), "RPM"),
+          _buildCard("냉각 온도", coolant.toStringAsFixed(0), "°C"),
+          _buildCard("흡기 온도 (IAT)", iat.toStringAsFixed(0), "°C"),
+          _buildCard("엔진 부하", load.toStringAsFixed(1), "%"),
+          _buildCard("흡기 압력 (MAP)", map.toStringAsFixed(0), "kPa"),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCard(String title, String val, String unit) {
+    return Container(
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 5)]),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          Text(val, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          Text(unit, style: const TextStyle(color: Colors.blueGrey, fontSize: 11)),
+        ],
+      ),
     );
   }
 }
