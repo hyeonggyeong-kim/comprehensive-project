@@ -36,11 +36,21 @@ out/
 ### VS Code ###
 .vscode/
 
-.env
+### Flutter & Collaboration Custom ###
+# 플러터 경로 정보가 담기는 파일 (동료와 경로가 다를 때 충돌 주범)
+**/android/local.properties
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
 
-.sql/
+# 플러터 빌드 및 의존성 관련
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
 
-# YML 파일
-**/application.yml
-**/application-dev.yml
-**/application-pro.yml
+# 개인별 인텔리제이 설정 (이미 위쪽에 있지만 확실히 하기 위해)
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+*.iml
