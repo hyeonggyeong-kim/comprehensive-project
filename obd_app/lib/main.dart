@@ -1,8 +1,15 @@
+import 'driving_record.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'package:http/http.dart' as http;
+import 'login.dart';
+import 'diagnostic.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+
 
 void main() => runApp(const OBDApp());
 
@@ -35,10 +42,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: const LoginDrawer(),
+
       appBar: AppBar(
-        leading: const Icon(Icons.menu, color: Colors.black, size: 35),
+        // 🚨 기존에 있던 leading: Icon(Icons.menu...) 부분은 삭제하세요! (drawer가 자동으로 만들어줍니다)
+        iconTheme: const IconThemeData(color: Colors.black, size: 35), // 햄버거 아이콘 색상/크기 지정
         title: const Text("MOBYDICK", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, letterSpacing: 2)),
-        centerTitle: true, backgroundColor: Colors.transparent, elevation: 0,
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -113,10 +125,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => DashboardScreen(device: globalConnectedDevice)));
                   }),
                   _buildGridItem(Icons.assignment_outlined, "차량진단", () {
-                    _showToast("차량진단");
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => DiagnosticScreen(device: globalConnectedDevice))
+                    );
                   }),
                   _buildGridItem(Icons.route_outlined, "주행 기록", () {
-                    _showToast("주행 기록");
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const DrivingRecordScreen()));
                   }),
                   _buildGridItem(Icons.thumb_up_alt_outlined, "연비", () {
                     _showToast("연비");
@@ -198,6 +213,7 @@ class _BluetoothScanScreenState extends State<BluetoothScanScreen> {
 }
 
 // --- 3. 통합 대시보드 화면 (기존 코드와 완벽히 동일) ---
+// --- 3. 통합 대시보드 화면 (실시간 데이터 수집 및 주행 기록 기능 탑재) ---
 class DashboardScreen extends StatefulWidget {
   final BluetoothDevice? device;
   const DashboardScreen({super.key, this.device});
@@ -206,17 +222,77 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  // 💡 [수정됨] 1. 수집할 변수들을 12개로 왕창 늘려줍니다.
   double speed = 0, rpm = 0, coolant = 0, iat = 0, load = 0, map = 0;
+  double maf = 0, throttle = 0, fuelLevel = 0, ambient = 0, oilTemp = 0, voltage = 0;
+
   BluetoothCharacteristic? writeChar;
   BluetoothCharacteristic? notifyChar;
   StreamSubscription? _valueSubscription;
   Timer? _timer;
   String _dataBuffer = "";
 
+  bool _isRecording = false;
+  List<Map<String, dynamic>> _drivingLogs = [];
+  DateTime? _startTime;
+
   @override
   void initState() {
     super.initState();
     if (widget.device != null) { _initRealData(); } else { _initSimulation(); }
+  }
+
+  void _toggleRecording() async {
+    if (!_isRecording) {
+      setState(() {
+        _isRecording = true;
+        _drivingLogs.clear();
+        _startTime = DateTime.now();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('주행 데이터 수집을 시작합니다. ⏱️')));
+    } else {
+      setState(() => _isRecording = false);
+      await _sendDrivingRecordToServer();
+    }
+  }
+
+  Future<void> _sendDrivingRecordToServer() async {
+    if (_drivingLogs.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final String email = prefs.getString('userEmail') ?? 'test@naver.com';
+
+    double totalSpeed = 0, totalRpm = 0;
+    for (var log in _drivingLogs) {
+      totalSpeed += log['speed'];
+      totalRpm += log['rpm'];
+    }
+    double avgSpeed = totalSpeed / _drivingLogs.length;
+    double avgRpm = totalRpm / _drivingLogs.length;
+
+    final String myIpAddress = '10.237.177.110'; // 🚨 본인 PC IP 확인
+    final url = Uri.parse('http://$myIpAddress:8080/api/driving/save');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'userEmail': email,
+          'startTime': _startTime.toString().substring(0, 16),
+          'endTime': DateTime.now().toString().substring(0, 16),
+          'avgSpeed': double.parse(avgSpeed.toStringAsFixed(1)),
+          'avgRpm': double.parse(avgRpm.toStringAsFixed(0)),
+          'detailedData': jsonEncode(_drivingLogs)
+        }),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🏎️ 주행 기록(상세 데이터 포함)이 안전하게 저장되었습니다!')));
+      }
+    } catch (e) {
+      print("주행 기록 전송 실패: $e");
+    }
   }
 
   void _initRealData() async {
@@ -239,19 +315,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await writeChar!.write(utf8.encode("ATS0\r"));
       await Future.delayed(const Duration(milliseconds: 200));
 
-      _timer = Timer.periodic(const Duration(seconds: 1), (t) => _sendCommands());
+      _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+        _sendCommands();
+
+        if (_isRecording) {
+          // 💡 [수정됨] 3. 장바구니에 새 변수 이름표를 모두 붙여줍니다!
+          _drivingLogs.add({
+            'timestamp': t.tick,
+            'lat': 0.0,
+            'lon': 0.0,
+            'speed': speed,
+            'rpm': rpm,
+            'pedal_d': 0.0,
+            'throttle': throttle,
+            'fuel_rail': 0.0,
+            'maf': maf,
+            'fuel_level': fuelLevel,
+            'torque': 0.0,
+            'load': load,
+            'map': map,
+            'oil_temp': oilTemp,
+            'coolant': coolant,
+            'stft1': 0.0,
+            'stft2': 0.0,
+            'ltft1': 0.0,
+            'ltft2': 0.0,
+            'ambient_temp': ambient,
+            'barometric': 0.0,
+            'ev_battery': 0.0,
+            'dpf_delta': 0.0,
+            'dpf_temp': 0.0,
+            'iat': iat,
+            'egt1': 0.0,
+            'egt2': 0.0,
+            'module_voltage': voltage,
+          });
+        }
+      });
     }
   }
 
   void _sendCommands() async {
     if (writeChar == null) return;
-    final pids = ["010C\r", "010D\r", "0105\r", "010F\r", "0104\r", "010B\r"];
+
+    // 💡 [수정됨] 기존 6개에서 -> 전 세계 공통 핵심 센서 12개로 질문 대폭 추가!
+    final pids = [
+      "010C\r", "010D\r", "0105\r", "010F\r", "0104\r", "010B\r",
+      "0110\r", "0111\r", "012F\r", "0146\r", "015C\r", "0142\r"
+    ];
+
     for (var pid in pids) {
       await writeChar!.write(utf8.encode(pid));
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 70));
     }
   }
 
+  // 💡 [수정됨] 2. 번역기 코드 교체 (12가지를 모두 해석합니다)
   void _parseOBDData(List<int> data) {
     if (data.isEmpty) return;
     String incoming = utf8.decode(data, allowMalformed: true);
@@ -267,21 +386,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (cleanData.length >= start + 4) {
             int a = int.parse(cleanData.substring(start, start + 2), radix: 16);
             int b = int.parse(cleanData.substring(start + 2, start + 4), radix: 16);
-            double val = ((a * 256) + b) / 4;
-            if (val < 9000) rpm = val;
+            rpm = ((a * 256) + b) / 4;
           }
         }
         if (cleanData.contains("410D")) {
           int start = cleanData.indexOf("410D") + 4;
           if (cleanData.length >= start + 2) {
-            double val = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble();
-            if (val < 300) speed = val;
+            speed = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble();
           }
         }
         if (cleanData.contains("4105")) {
           int start = cleanData.indexOf("4105") + 4;
-          if (cleanData.length >= start + 2) {
-            coolant = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble() - 40;
+          coolant = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble() - 40;
+        }
+        if (cleanData.contains("410F")) {
+          int start = cleanData.indexOf("410F") + 4;
+          iat = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble() - 40;
+        }
+        if (cleanData.contains("4104")) {
+          int start = cleanData.indexOf("4104") + 4;
+          load = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble() * 100 / 255;
+        }
+        if (cleanData.contains("410B")) {
+          int start = cleanData.indexOf("410B") + 4;
+          map = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble();
+        }
+        if (cleanData.contains("4110")) {
+          int start = cleanData.indexOf("4110") + 4;
+          if (cleanData.length >= start + 4) {
+            int a = int.parse(cleanData.substring(start, start + 2), radix: 16);
+            int b = int.parse(cleanData.substring(start + 2, start + 4), radix: 16);
+            maf = ((a * 256) + b) / 100;
+          }
+        }
+        if (cleanData.contains("4111")) {
+          int start = cleanData.indexOf("4111") + 4;
+          throttle = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble() * 100 / 255;
+        }
+        if (cleanData.contains("412F")) {
+          int start = cleanData.indexOf("412F") + 4;
+          fuelLevel = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble() * 100 / 255;
+        }
+        if (cleanData.contains("4146")) {
+          int start = cleanData.indexOf("4146") + 4;
+          ambient = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble() - 40;
+        }
+        if (cleanData.contains("415C")) {
+          int start = cleanData.indexOf("415C") + 4;
+          oilTemp = int.parse(cleanData.substring(start, start + 2), radix: 16).toDouble() - 40;
+        }
+        if (cleanData.contains("4142")) {
+          int start = cleanData.indexOf("4142") + 4;
+          if (cleanData.length >= start + 4) {
+            int a = int.parse(cleanData.substring(start, start + 2), radix: 16);
+            int b = int.parse(cleanData.substring(start + 2, start + 4), radix: 16);
+            voltage = ((a * 256) + b) / 1000;
           }
         }
       } catch (e) {
@@ -292,8 +451,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _initSimulation() {
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (t) {
-      setState(() { speed = 0; rpm = 750 + (t.tick % 50).toDouble(); coolant = 85; });
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      setState(() {
+        speed = 40 + (t.tick % 30).toDouble();
+        rpm = 1500 + (t.tick % 500).toDouble();
+        coolant = 85;
+        // 시뮬레이션에서도 가짜 데이터를 조금씩 변경해 줍니다.
+        throttle = 15 + (t.tick % 10).toDouble();
+        maf = 5 + (t.tick % 5).toDouble();
+        fuelLevel = 60.5;
+        voltage = 13.8;
+      });
+
+      if (_isRecording) {
+        // 💡 [수정됨] 시뮬레이션용 장바구니에도 새 변수들을 똑같이 적용!
+        _drivingLogs.add({
+          'timestamp': t.tick,
+          'lat': 0.0,
+          'lon': 0.0,
+          'speed': speed,
+          'rpm': rpm,
+          'pedal_d': 0.0,
+          'throttle': throttle,
+          'fuel_rail': 0.0,
+          'maf': maf,
+          'fuel_level': fuelLevel,
+          'torque': 0.0,
+          'load': load,
+          'map': map,
+          'oil_temp': oilTemp,
+          'coolant': coolant,
+          'stft1': 0.0,
+          'stft2': 0.0,
+          'ltft1': 0.0,
+          'ltft2': 0.0,
+          'ambient_temp': ambient,
+          'barometric': 0.0,
+          'ev_battery': 0.0,
+          'dpf_delta': 0.0,
+          'dpf_temp': 0.0,
+          'iat': iat,
+          'egt1': 0.0,
+          'egt2': 0.0,
+          'module_voltage': voltage,
+        });
+      }
     });
   }
 
@@ -304,16 +506,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F7),
-      appBar: AppBar(title: Text(widget.device != null ? "실시간 주행 데이터" : "테스트 대시보드"), backgroundColor: Colors.white, elevation: 1),
-      body: GridView.count(
-        padding: const EdgeInsets.all(16), crossAxisCount: 2, mainAxisSpacing: 16, crossAxisSpacing: 16,
+      appBar: AppBar(
+        title: Text(widget.device != null ? "실시간 주행 데이터" : "테스트 대시보드"),
+        backgroundColor: Colors.white,
+        elevation: 1,
+        iconTheme: const IconThemeData(color: Colors.black),
+      ),
+      body: Column(
         children: [
-          _buildCard("속도", speed.toStringAsFixed(0), "km/h"),
-          _buildCard("엔진 회전수 (RPM)", rpm.toStringAsFixed(0), "RPM"),
-          _buildCard("냉각 온도", coolant.toStringAsFixed(0), "°C"),
-          _buildCard("흡기 온도 (IAT)", iat.toStringAsFixed(0), "°C"),
-          _buildCard("엔진 부하", load.toStringAsFixed(1), "%"),
-          _buildCard("흡기 압력 (MAP)", map.toStringAsFixed(0), "kPa"),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+            color: Colors.white,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.circle, color: _isRecording ? Colors.red : Colors.grey, size: 14),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isRecording ? "주행 데이터 로깅 중... (${_drivingLogs.length}초 쌓임)" : "주행 기록 정지됨",
+                      style: TextStyle(fontWeight: FontWeight.bold, color: _isRecording ? Colors.red : Colors.black54),
+                    ),
+                  ],
+                ),
+                ElevatedButton(
+                  onPressed: _toggleRecording,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isRecording ? Colors.red : Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                  child: Text(_isRecording ? "주행 종료" : "주행 시작", style: const TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          ),
+
+          // 💡 실시간 데이터 계기판 그리드 (6개 -> 12개로 확장!)
+          Expanded(
+            child: GridView.count(
+              padding: const EdgeInsets.all(16),
+              crossAxisCount: 2, // 2열로 배치
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              // 카드가 12개로 늘어났으므로 비율을 조금 수정해 줍니다.
+              childAspectRatio: 1.2,
+              children: [
+                _buildCard("속도", speed.toStringAsFixed(0), "km/h"),
+                _buildCard("엔진 회전수 (RPM)", rpm.toStringAsFixed(0), "RPM"),
+                _buildCard("냉각 온도", coolant.toStringAsFixed(0), "°C"),
+                _buildCard("흡기 온도 (IAT)", iat.toStringAsFixed(0), "°C"),
+                _buildCard("엔진 부하", load.toStringAsFixed(1), "%"),
+                _buildCard("흡기 압력 (MAP)", map.toStringAsFixed(0), "kPa"),
+
+                // 👇 새롭게 추가된 6개의 데이터 카드 👇
+                _buildCard("공기량 (MAF)", maf.toStringAsFixed(1), "g/s"),
+                _buildCard("스로틀 개방도", throttle.toStringAsFixed(1), "%"),
+                _buildCard("연료 잔여량", fuelLevel.toStringAsFixed(1), "%"),
+                _buildCard("외부 공기 온도", ambient.toStringAsFixed(0), "°C"),
+                _buildCard("엔진 오일 온도", oilTemp.toStringAsFixed(0), "°C"),
+                _buildCard("배터리 전압", voltage.toStringAsFixed(1), "V"),
+              ],
+            ),
+          ),
         ],
       ),
     );
