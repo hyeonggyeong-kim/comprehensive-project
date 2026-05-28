@@ -15,7 +15,10 @@ public class DrivingRecord {
     private Double avgSpeed;
     private Double avgRpm;
 
-    @Column(columnDefinition = "LONGTEXT") // 대용량 텍스트 지정을 위해 필수!
+    // [추가] FastAPI에서 받아온 AI 위험도 점수 저장
+    private Double riskScore;
+
+    @Column(columnDefinition = "LONGTEXT")
     private String detailedData;
 
     // Getter & Setter
@@ -31,6 +34,8 @@ public class DrivingRecord {
     public void setAvgSpeed(Double avgSpeed) { this.avgSpeed = avgSpeed; }
     public Double getAvgRpm() { return avgRpm; }
     public void setAvgRpm(Double avgRpm) { this.avgRpm = avgRpm; }
+    public Double getRiskScore() { return riskScore; }
+    public void setRiskScore(Double riskScore) { this.riskScore = riskScore; }
     public String getDetailedData() { return detailedData; }
     public void setDetailedData(String detailedData) { this.detailedData = detailedData; }
 }
