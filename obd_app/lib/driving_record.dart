@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:excel/excel.dart';
 
 class DrivingRecordScreen extends StatefulWidget {
   const DrivingRecordScreen({super.key});
@@ -16,7 +18,7 @@ class DrivingRecordScreen extends StatefulWidget {
 class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
   List<dynamic> _historyList = [];
   bool _isLoading = true;
-  final String myIpAddress = '10.20.62.42';
+  final String myIpAddress = '10.20.38.179';
 
   @override
   void initState() {
@@ -54,6 +56,198 @@ class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
     } catch (e) {
       debugPrint("삭제 에러: $e");
     }
+  }
+
+  // ================================================================
+  // 파일 업로드 (CSV / JSON) → 파싱 → 백엔드 전송 + AI 분석
+  // ================================================================
+  Future<void> _uploadFile() async {
+    // 1. 파일 선택 (CSV, JSON, XLS, XLSX 모두 허용)
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv', 'json', 'xls', 'xlsx'],
+      allowMultiple: false,
+    );
+    if (result == null || result.files.single.path == null) return;
+
+    final file = File(result.files.single.path!);
+    final fileName = result.files.single.name.toLowerCase();
+    final prefs = await SharedPreferences.getInstance();
+    final String email = prefs.getString('userEmail') ?? 'test@naver.com';
+
+    try {
+      List<Map<String, dynamic>> detailedRows = [];
+      String startTime = '';
+      String endTime = '';
+      double avgSpeed = 0;
+      double avgRpm = 0;
+
+      if (fileName.endsWith('.csv')) {
+        // ── CSV 파싱 ────────────────────────────────────────────────
+        final lines = await file.readAsLines();
+        if (lines.length < 2) {
+          _showSnack('데이터가 없는 파일입니다.');
+          return;
+        }
+        final headers = lines[0].split(',').map((h) => h.trim()).toList();
+
+        for (int i = 1; i < lines.length; i++) {
+          final vals = lines[i].split(',');
+          if (vals.length < headers.length) continue;
+          final row = <String, dynamic>{};
+          for (int j = 0; j < headers.length; j++) {
+            row[headers[j]] = vals[j].trim();
+          }
+          detailedRows.add(_normalizeCsvRow(row, i - 1));
+        }
+      } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+        // ── XLS / XLSX 파싱 ─────────────────────────────────────────
+        final bytes = await file.readAsBytes();
+        final excel = Excel.decodeBytes(bytes);
+
+        // 첫 번째 시트 사용
+        final sheet = excel.tables[excel.tables.keys.first];
+        if (sheet == null || sheet.rows.length < 2) {
+          _showSnack('데이터가 없는 파일입니다.');
+          return;
+        }
+
+        // 첫 행 = 헤더
+        final headers = sheet.rows[0]
+            .map((cell) => cell?.value?.toString().trim() ?? '')
+            .toList();
+
+        for (int i = 1; i < sheet.rows.length; i++) {
+          final row = <String, dynamic>{};
+          for (int j = 0; j < headers.length; j++) {
+            if (j < sheet.rows[i].length) {
+              row[headers[j]] = sheet.rows[i][j]?.value?.toString() ?? '0';
+            }
+          }
+          detailedRows.add(_normalizeCsvRow(row, i - 1)); // CSV와 동일한 정규화
+        }
+      } else {
+        // ── JSON 파싱 ────────────────────────────────────────────────
+        final content = await file.readAsString();
+        final decoded = jsonDecode(content);
+        if (decoded is List) {
+          for (int i = 0; i < decoded.length; i++) {
+            detailedRows.add(_normalizeJsonRow(decoded[i], i));
+          }
+        } else if (decoded is Map) {
+          // { "records": [...] } 형태도 허용
+          final list = decoded['records'] ?? decoded['data'] ?? [];
+          for (int i = 0; i < list.length; i++) {
+            detailedRows.add(_normalizeJsonRow(list[i], i));
+          }
+        }
+      }
+
+      if (detailedRows.isEmpty) {
+        _showSnack('파싱된 데이터가 없습니다. 파일 형식을 확인하세요.');
+        return;
+      }
+
+      // 2. 평균 계산
+      avgSpeed = detailedRows
+          .map((r) => _toDouble(r['speed']))
+          .reduce((a, b) => a + b) /
+          detailedRows.length;
+      avgRpm = detailedRows
+          .map((r) => _toDouble(r['rpm']))
+          .reduce((a, b) => a + b) /
+          detailedRows.length;
+
+      // 3. 시작/종료 시간 (파일명 또는 현재 시각 기반)
+      final now = DateTime.now();
+      startTime =
+      '${now.year}-${_pad(now.month)}-${_pad(now.day)} ${_pad(now.hour)}:${_pad(now.minute)}';
+      endTime = startTime;
+
+      // 4. 백엔드로 전송
+      final payload = {
+        'userEmail': email,
+        'startTime': startTime,
+        'endTime': endTime,
+        'avgSpeed': avgSpeed,
+        'avgRpm': avgRpm,
+        'detailedData': jsonEncode(detailedRows),
+      };
+
+      _showSnack('파일 분석 중... (AI 위험도 계산 포함)');
+
+      final url =
+      Uri.parse('http://$myIpAddress:8080/api/driving/save');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode == 200) {
+        final res = jsonDecode(response.body);
+        final score = res['risk_score'] ?? 0.0;
+        final label = res['risk_label'] ?? '';
+        _showSnack(
+            '업로드 완료! AI 위험도: ${score.toStringAsFixed(1)}점 ($label)');
+        _fetchDrivingHistory(); // 목록 갱신
+      } else {
+        _showSnack('서버 오류: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('파일 업로드 오류: $e');
+      _showSnack('오류가 발생했습니다: $e');
+    }
+  }
+
+  /// CSV 행을 백엔드가 기대하는 키 형식으로 정규화
+  Map<String, dynamic> _normalizeCsvRow(
+      Map<String, dynamic> row, int index) {
+    return {
+      'timestamp': index,
+      'speed': _toDouble(row['차량 속도 센서'] ?? row['speed'] ?? row['SPEED']),
+      'rpm': _toDouble(row['엔진 회전수'] ?? row['rpm'] ?? row['ENGINE_RPM']),
+      'throttle':
+      _toDouble(row['스로틀 위치 절대값'] ?? row['throttle'] ?? row['THROTTLE_POS']),
+      'load': _toDouble(row['엔진 부하'] ?? row['load'] ?? row['ENGINE_LOAD']),
+      'coolant': _toDouble(
+          row['엔진 냉각 온도'] ?? row['coolant'] ?? row['ENGINE_COOLANT_TEMP']),
+      'iat': _toDouble(
+          row['흡입 공기 온도 (IAT)'] ?? row['iat'] ?? row['AIR_INTAKE_TEMP']),
+      'maf': _toDouble(row['공기량 (MAF) 센서'] ?? row['maf'] ?? row['MAF']),
+      'lat': _toDouble(row['Lat.'] ?? row['lat'] ?? 0),
+      'lon': _toDouble(row['Lon.'] ?? row['lon'] ?? 0),
+    };
+  }
+
+  /// JSON 행 정규화
+  Map<String, dynamic> _normalizeJsonRow(dynamic row, int index) {
+    if (row is! Map) return {'timestamp': index};
+    return {
+      'timestamp': row['timestamp'] ?? index,
+      'speed': _toDouble(row['speed'] ?? row['SPEED']),
+      'rpm': _toDouble(row['rpm'] ?? row['ENGINE_RPM']),
+      'throttle': _toDouble(row['throttle'] ?? row['THROTTLE_POS']),
+      'load': _toDouble(row['load'] ?? row['ENGINE_LOAD']),
+      'coolant': _toDouble(row['coolant'] ?? row['ENGINE_COOLANT_TEMP']),
+      'iat': _toDouble(row['iat'] ?? row['AIR_INTAKE_TEMP']),
+      'maf': _toDouble(row['maf'] ?? row['MAF']),
+      'lat': _toDouble(row['lat'] ?? 0),
+      'lon': _toDouble(row['lon'] ?? 0),
+    };
+  }
+
+  double _toDouble(dynamic v) {
+    if (v == null) return 0.0;
+    return double.tryParse(v.toString()) ?? 0.0;
+  }
+
+  String _pad(int n) => n.toString().padLeft(2, '0');
+
+  void _showSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 
   Future<void> _exportToExcel(Map<String, dynamic> record) async {
@@ -177,6 +371,13 @@ class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.black),
         elevation: 1,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.upload_file, color: Colors.blue),
+            tooltip: 'CSV / JSON / XLSX 파일 업로드',
+            onPressed: _uploadFile,
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
