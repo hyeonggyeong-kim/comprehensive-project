@@ -18,7 +18,7 @@ class DrivingRecordScreen extends StatefulWidget {
 class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
   List<dynamic> _historyList = [];
   bool _isLoading = true;
-  final String myIpAddress = '10.20.38.179';
+  final String myIpAddress = '172.30.1.15';
 
   @override
   void initState() {

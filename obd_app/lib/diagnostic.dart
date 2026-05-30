@@ -55,7 +55,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
     final String? email = prefs.getString('userEmail');
     if (email == null) return;
 
-    final String myIpAddress = '192.168.0.22'; // 핫스팟 IP 적용
+    final String myIpAddress = '172.30.1.15'; // 핫스팟 IP 적용
     final url = Uri.parse('http://$myIpAddress:8080/api/diagnostics/save');
 
     try {
@@ -82,7 +82,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
       return;
     }
 
-    final String myIpAddress = '192.168.0.22';
+    final String myIpAddress = '172.30.1.15';
     final url = Uri.parse('http://$myIpAddress:8080/api/diagnostics/history?email=$email');
 
     showDialog(
