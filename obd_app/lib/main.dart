@@ -1,4 +1,5 @@
 import 'driving_record.dart';
+import 'driving_report.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -140,7 +141,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     _showToast("운전점수");
                   }),
                   _buildGridItem(Icons.assignment_ind_outlined, "성향리포트", () {
-                    _showToast("성향리포트");
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DrivingReportScreen()),
+                    );
                   }),
                 ],
               ),
@@ -270,7 +274,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double avgSpeed = totalSpeed / _drivingLogs.length;
     double avgRpm = totalRpm / _drivingLogs.length;
 
-    final String myIpAddress = '10.237.177.110'; // 🚨 본인 PC IP 확인
+    final String myIpAddress = '172.30.1.15'; // 🚨 본인 PC IP 확인
     final url = Uri.parse('http://$myIpAddress:8080/api/driving/save');
 
     try {

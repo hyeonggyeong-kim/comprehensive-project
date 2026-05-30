@@ -494,11 +494,12 @@ class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
     final String label;
     final IconData icon;
 
-    if (score < 33) {
+    // FastAPI 기준과 동일: 81↑ safe / 41~80 normal / 0~40 aggressive
+    if (score >= 81) {
       color = Colors.green;
       label = "안전";
       icon = Icons.sentiment_satisfied_alt;
-    } else if (score < 66) {
+    } else if (score >= 41) {
       color = Colors.orange;
       label = "보통";
       icon = Icons.sentiment_neutral;
