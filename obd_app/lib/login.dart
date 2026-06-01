@@ -43,7 +43,7 @@ class _LoginDrawerState extends State<LoginDrawer> {
     setState(() => _isLoading = true);
 
     // 🚨 본인 PC의 IPv4 주소인지 확인하세요!
-    final String myIpAddress = '172.16.38.86';
+    final String myIpAddress = '172.30.1.99';
     final url = Uri.parse('http://$myIpAddress:8080/api/login');
 
     try {

@@ -18,7 +18,7 @@ class DrivingRecordScreen extends StatefulWidget {
 class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
   List<dynamic> _historyList = [];
   bool _isLoading = true;
-  final String myIpAddress = '172.16.38.86';
+  final String myIpAddress = '172.30.1.99';
 
   @override
   void initState() {
@@ -448,9 +448,9 @@ class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildStatItem(Icons.speed, "평균 속도",
-                          "${record['avgSpeed']} km/h", Colors.orange),
+                          "${double.tryParse(record['avgSpeed'].toString())?.toStringAsFixed(1) ?? '0.0'} km/h", Colors.orange),
                       _buildStatItem(Icons.settings, "평균 RPM",
-                          "${record['avgRpm']} RPM", Colors.purple),
+                          "${double.tryParse(record['avgRpm'].toString())?.toStringAsFixed(1) ?? '0.0'} RPM", Colors.purple),
                       _buildRiskItem(record['riskScore']),
                     ],
                   ),
@@ -495,11 +495,12 @@ class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
     final String label;
     final IconData icon;
 
-    if (score < 33) {
+    // FastAPI 기준과 동일: 81↑ safe / 41~80 normal / 0~40 aggressive
+    if (score >= 81) {
       color = Colors.green;
       label = "안전";
       icon = Icons.sentiment_satisfied_alt;
-    } else if (score < 66) {
+    } else if (score >= 41) {
       color = Colors.orange;
       label = "보통";
       icon = Icons.sentiment_neutral;
