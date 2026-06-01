@@ -22,7 +22,7 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = true);
 
     // 🚨 반드시 본인 PC의 IP 주소로 변경하세요!
-    final String myIpAddress = '192.168.0.22';
+    final String myIpAddress = '172.16.38.86';
     final url = Uri.parse('http://$myIpAddress:8080/api/signup');
 
     try {

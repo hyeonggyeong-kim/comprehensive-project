@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import 'login.dart';
 import 'diagnostic.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'eco_driving_screen.dart';
 
 
 void main() => runApp(const OBDApp());
@@ -134,7 +134,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const DrivingRecordScreen()));
                   }),
                   _buildGridItem(Icons.thumb_up_alt_outlined, "연비", () {
-                    _showToast("연비");
+                    // 기존 _showToast("연비"); 를 지우고 아래 코드로 교체!
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const EcoDrivingScreen())
+                    );
                   }),
                   _buildGridItem(Icons.explore_outlined, "운전점수", () {
                     _showToast("운전점수");
@@ -270,7 +274,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double avgSpeed = totalSpeed / _drivingLogs.length;
     double avgRpm = totalRpm / _drivingLogs.length;
 
-    final String myIpAddress = '10.237.177.110'; // 🚨 본인 PC IP 확인
+    final String myIpAddress = '172.16.38.86'; // 🚨 본인 PC IP 확인
     final url = Uri.parse('http://$myIpAddress:8080/api/driving/save');
 
     try {

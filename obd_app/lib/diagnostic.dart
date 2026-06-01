@@ -15,21 +15,16 @@ class DiagnosticScreen extends StatefulWidget {
 
 class _DiagnosticScreenState extends State<DiagnosticScreen> {
   bool _isScanning = false;
-  List<String> _foundDTCs = [];
 
-  // 고장 코드 번역 사전
-  final Map<String, String> _dtcDictionary = {
-    'P0100': '공기 유량 센서(MAF) 회로 이상',
-    'P0113': '흡기 온도 센서(IAT) 회로 전압 높음',
-    'P0133': '산소 센서 반응 늦음 (Bank 1, Sensor 1)',
-    'P0300': '다중 실린더 엔진 실화(Misfire) 감지됨',
-    'P0420': '촉매 변환기 정화 효율 저하',
-    'P0500': '차속 센서(VSS) 시스템 이상',
-    'C0220': 'ABS 휠 속도 센서 이상',
-    'U0100': '엔진 제어 모듈(ECM) 통신 끊김',
-  };
+  // 💡 이제 코드 번호만 저장하는 게 아니라, 서버에서 받아온 뜻(description)도 같이 저장합니다.
+  List<Map<String, String>> _foundDTCs = [];
 
+  // 💡 본인의 서버 IP (핫스팟 환경 등 상황에 맞게 수정하세요)
+  final String myIpAddress = '192.168.0.22';
+
+  // ================================================================
   // 1. 진단(조회) 시작 함수
+  // ================================================================
   Future<void> _startDiagnosis() async {
     setState(() {
       _isScanning = true;
@@ -37,10 +32,12 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
     });
 
     if (widget.device != null) {
-      await _readRealDTC(); // 실제 블루투스 통신을 통해 조회만 함
+      await _readRealDTC();
     } else {
-      await Future.delayed(const Duration(seconds: 3)); // 시뮬레이션
-      setState(() { _foundDTCs = ['P0113', 'P0420']; });
+      // 💡 시뮬레이션: 블루투스 기기가 없을 때 테스트용으로 P0113과 P0420을 서버에 물어봅니다.
+      await Future.delayed(const Duration(seconds: 3));
+      await _fetchDtcMeaning('P0113');
+      await _fetchDtcMeaning('P0420');
     }
 
     setState(() => _isScanning = false);
@@ -49,14 +46,45 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
     await _saveResultToDB();
   }
 
-  // 2. 결과 저장
+  // ================================================================
+  // 2. 서버에 고장 코드 뜻 물어보기 (NEW!)
+  // ================================================================
+  Future<void> _fetchDtcMeaning(String code) async {
+    final url = Uri.parse('http://$myIpAddress:8080/api/diagnostics/code/$code');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        // 서버가 "code: P0113, description: 흡기 온도 센서 이상" 이라고 대답해줍니다.
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        setState(() {
+          _foundDTCs.add({
+            'code': data['code'] ?? code,
+            'description': data['description'] ?? '알 수 없는 코드입니다.'
+          });
+        });
+      } else {
+        setState(() => _foundDTCs.add({'code': code, 'description': '서버 응답 오류'}));
+      }
+    } catch (e) {
+      debugPrint("사전 조회 실패: $e");
+      setState(() => _foundDTCs.add({'code': code, 'description': '네트워크 오류'}));
+    }
+  }
+
+  // ================================================================
+  // 3. 진단 결과 DB 저장
+  // ================================================================
   Future<void> _saveResultToDB() async {
     final prefs = await SharedPreferences.getInstance();
     final String? email = prefs.getString('userEmail');
     if (email == null) return;
 
-    final String myIpAddress = '192.168.0.22'; // 핫스팟 IP 적용
     final url = Uri.parse('http://$myIpAddress:8080/api/diagnostics/save');
+
+    // DB에 저장할 때는 코드 번호들만 콤마로 묶어서(예: P0113,P0420) 보냅니다.
+    String codeString = _foundDTCs.isEmpty
+        ? '정상'
+        : _foundDTCs.map((item) => item['code']).join(',');
 
     try {
       await http.post(
@@ -64,16 +92,18 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'userEmail': email,
-          'dtcCodes': _foundDTCs.isEmpty ? '정상' : _foundDTCs.join(','),
+          'dtcCodes': codeString,
           'statusMessage': _foundDTCs.isEmpty ? '차량 상태 정상' : '고장 코드 ${_foundDTCs.length}건 발견'
         }),
       );
     } catch (e) {
-      print("저장 실패: $e");
+      debugPrint("저장 실패: $e");
     }
   }
 
-  // 3. 이력 조회 팝업
+  // ================================================================
+  // 4. 이력 조회 팝업
+  // ================================================================
   void _showHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final String? email = prefs.getString('userEmail');
@@ -82,7 +112,6 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
       return;
     }
 
-    final String myIpAddress = '192.168.0.22';
     final url = Uri.parse('http://$myIpAddress:8080/api/diagnostics/history?email=$email');
 
     showDialog(
@@ -116,7 +145,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
     );
   }
 
-  // 4. DTC 조회 로직 (Mode 03 명령만 수행)
+  // ================================================================
+  // 5. 실제 블루투스 DTC 조회 로직
+  // ================================================================
   Future<void> _readRealDTC() async {
     try {
       List<BluetoothService> services = await widget.device!.discoverServices();
@@ -129,23 +160,29 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
       }
       if (notifyChar != null && writeChar != null) {
         await notifyChar.setNotifyValue(true);
-        StreamSubscription sub = notifyChar.lastValueStream.listen((value) {
+        StreamSubscription sub = notifyChar.lastValueStream.listen((value) async {
           String response = utf8.decode(value, allowMalformed: true).replaceAll(RegExp(r'[\s\r\n>]'), '');
           if (response.startsWith("43") && response.length >= 6) {
             String hexCode = response.substring(2, 6);
             if (hexCode != "0000") {
-              // DTC 변환 로직 (Mode 03의 대답을 해석)
               String parsedCode = _parseOBDDTC(hexCode);
-              setState(() { if (!_foundDTCs.contains(parsedCode)) _foundDTCs.add(parsedCode); });
+
+              // 💡 이미 조회한 코드가 아니라면 서버에 물어봅니다!
+              bool alreadyExists = _foundDTCs.any((item) => item['code'] == parsedCode);
+              if (!alreadyExists) {
+                await _fetchDtcMeaning(parsedCode);
+              }
             }
           }
         });
-        // 03 명령만 전송하여 코드 조회 수행
+
         await writeChar.write(utf8.encode("03\r"));
         await Future.delayed(const Duration(seconds: 4));
         await sub.cancel();
       }
-    } catch (e) { print("진단 에러: $e"); }
+    } catch (e) {
+      debugPrint("진단 에러: $e");
+    }
   }
 
   String _parseOBDDTC(String hexStr) {
@@ -156,6 +193,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
     return "$dtcLetter$dtcFirstNum${hexStr.substring(1, 4)}";
   }
 
+  // ================================================================
+  // 6. UI 그리기
+  // ================================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -185,8 +225,15 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
             child: ListView.builder(
               itemCount: _foundDTCs.length,
               itemBuilder: (context, index) {
-                String code = _foundDTCs[index];
-                return Card(child: ListTile(title: Text(code), subtitle: Text(_dtcDictionary[code] ?? '알 수 없는 코드')));
+                var item = _foundDTCs[index];
+                return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: ListTile(
+                      leading: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 36),
+                      title: Text(item['code'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      subtitle: Text(item['description'] ?? '알 수 없는 오류'),
+                    )
+                );
               },
             ),
           ),
