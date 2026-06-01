@@ -18,6 +18,10 @@ public class DrivingRecord {
     // [추가] FastAPI에서 받아온 AI 위험도 점수 저장
     private Double riskScore;
 
+    // 🟢 [여기에 추가됨!] 연비 등급 라벨 저장 (예: "안전 (Eco)")
+    // 🟢
+    private String riskLabel;
+
     @Column(columnDefinition = "LONGTEXT")
     private String detailedData;
 
@@ -34,8 +38,14 @@ public class DrivingRecord {
     public void setAvgSpeed(Double avgSpeed) { this.avgSpeed = avgSpeed; }
     public Double getAvgRpm() { return avgRpm; }
     public void setAvgRpm(Double avgRpm) { this.avgRpm = avgRpm; }
+
     public Double getRiskScore() { return riskScore; }
     public void setRiskScore(Double riskScore) { this.riskScore = riskScore; }
+
+    // 🟢 [여기에 추가됨!] riskLabel의 Getter & Setter
+    public String getRiskLabel() { return riskLabel; }
+    public void setRiskLabel(String riskLabel) { this.riskLabel = riskLabel; }
+
     public String getDetailedData() { return detailedData; }
     public void setDetailedData(String detailedData) { this.detailedData = detailedData; }
 }

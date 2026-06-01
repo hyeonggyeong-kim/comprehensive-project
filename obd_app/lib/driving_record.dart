@@ -18,7 +18,7 @@ class DrivingRecordScreen extends StatefulWidget {
 class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
   List<dynamic> _historyList = [];
   bool _isLoading = true;
-  final String myIpAddress = '172.30.1.15';
+  final String myIpAddress = '172.16.38.86';
 
   @override
   void initState() {
@@ -60,6 +60,7 @@ class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
 
   // ================================================================
   // 파일 업로드 (CSV / JSON) → 파싱 → 백엔드 전송 + AI 분석
+  // 🟢
   // ================================================================
   Future<void> _uploadFile() async {
     // 1. 파일 선택 (CSV, JSON, XLS, XLSX 모두 허용)
@@ -494,12 +495,11 @@ class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
     final String label;
     final IconData icon;
 
-    // FastAPI 기준과 동일: 81↑ safe / 41~80 normal / 0~40 aggressive
-    if (score >= 81) {
+    if (score < 33) {
       color = Colors.green;
       label = "안전";
       icon = Icons.sentiment_satisfied_alt;
-    } else if (score >= 41) {
+    } else if (score < 66) {
       color = Colors.orange;
       label = "보통";
       icon = Icons.sentiment_neutral;

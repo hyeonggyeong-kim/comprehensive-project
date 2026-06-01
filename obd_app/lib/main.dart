@@ -1,5 +1,4 @@
 import 'driving_record.dart';
-import 'driving_report.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -9,7 +8,7 @@ import 'package:http/http.dart' as http;
 import 'login.dart';
 import 'diagnostic.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'eco_driving_screen.dart';
 
 
 void main() => runApp(const OBDApp());
@@ -135,16 +134,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const DrivingRecordScreen()));
                   }),
                   _buildGridItem(Icons.thumb_up_alt_outlined, "연비", () {
-                    _showToast("연비");
+                    // 기존 _showToast("연비"); 를 지우고 아래 코드로 교체!
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const EcoDrivingScreen())
+                    );
                   }),
                   _buildGridItem(Icons.explore_outlined, "운전점수", () {
                     _showToast("운전점수");
                   }),
                   _buildGridItem(Icons.assignment_ind_outlined, "성향리포트", () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const DrivingReportScreen()),
-                    );
+                    _showToast("성향리포트");
                   }),
                 ],
               ),
@@ -217,6 +217,7 @@ class _BluetoothScanScreenState extends State<BluetoothScanScreen> {
 }
 
 // --- 3. 통합 대시보드 화면 (기존 코드와 완벽히 동일) ---
+// 🟢
 // --- 3. 통합 대시보드 화면 (실시간 데이터 수집 및 주행 기록 기능 탑재) ---
 class DashboardScreen extends StatefulWidget {
   final BluetoothDevice? device;
@@ -274,7 +275,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double avgSpeed = totalSpeed / _drivingLogs.length;
     double avgRpm = totalRpm / _drivingLogs.length;
 
-    final String myIpAddress = '172.30.1.15'; // 🚨 본인 PC IP 확인
+    final String myIpAddress = '172.16.38.86'; // 🚨 본인 PC IP 확인
     final url = Uri.parse('http://$myIpAddress:8080/api/driving/save');
 
     try {
