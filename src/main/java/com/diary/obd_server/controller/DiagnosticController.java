@@ -16,6 +16,7 @@ public class DiagnosticController {
     private DtcDictionaryRepository dtcDictionaryRepository;
 
     // 🟢 앱에서 "이 코드 뜻이 뭐야?" 하고 물어보는 창구
+    // 🟢
     @GetMapping("/code/{dtcCode}")
     public Map<String, String> getDtcMeaning(@PathVariable String dtcCode) {
         // DB에서 코드를 검색합니다.

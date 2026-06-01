@@ -29,6 +29,7 @@ class _EcoDrivingScreenState extends State<EcoDrivingScreen> {
 
   // ================================================================
   // 1. 서버에서 주행 이력(연비 점수 포함)을 가져오는 함수
+  // 🟢
   // ================================================================
   Future<void> _fetchEcoData() async {
     final prefs = await SharedPreferences.getInstance();

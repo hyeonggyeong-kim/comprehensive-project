@@ -90,6 +90,7 @@ public class DrivingRecordController {
             }
 
             // ── Step 1. FastAPI /predict 호출 ────────────────────────────
+            // 🟢
             Map<String, Object> sensorPayload = new LinkedHashMap<>();
             sensorPayload.put("SPEED",               record.getAvgSpeed());
             sensorPayload.put("ENGINE_RPM",          record.getAvgRpm());

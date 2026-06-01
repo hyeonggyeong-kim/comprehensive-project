@@ -60,6 +60,7 @@ class _DrivingRecordScreenState extends State<DrivingRecordScreen> {
 
   // ================================================================
   // 파일 업로드 (CSV / JSON) → 파싱 → 백엔드 전송 + AI 분석
+  // 🟢
   // ================================================================
   Future<void> _uploadFile() async {
     // 1. 파일 선택 (CSV, JSON, XLS, XLSX 모두 허용)

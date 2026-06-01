@@ -217,6 +217,7 @@ class _BluetoothScanScreenState extends State<BluetoothScanScreen> {
 }
 
 // --- 3. 통합 대시보드 화면 (기존 코드와 완벽히 동일) ---
+// 🟢
 // --- 3. 통합 대시보드 화면 (실시간 데이터 수집 및 주행 기록 기능 탑재) ---
 class DashboardScreen extends StatefulWidget {
   final BluetoothDevice? device;

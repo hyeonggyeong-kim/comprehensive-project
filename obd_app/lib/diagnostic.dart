@@ -74,6 +74,9 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
   // ================================================================
   // 3. 진단 결과 DB 저장
   // ================================================================
+  // ================================================================
+  // 3. 진단 결과 DB 저장
+  // ================================================================
   Future<void> _saveResultToDB() async {
     final prefs = await SharedPreferences.getInstance();
     final String? email = prefs.getString('userEmail');
@@ -82,13 +85,20 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
     final String myIpAddress = '192.168.0.22'; // 핫스팟 IP 적용
     final url = Uri.parse('http://$myIpAddress:8080/api/diagnostics/save');
 
+    // 👇 여기부터 👇 (이 부분이 병합 중에 빠졌습니다!)
+    // 🟢
+    String codeString = _foundDTCs.isEmpty
+        ? '정상'
+        : _foundDTCs.map((item) => item['code']).join(',');
+    // 👆 여기까지 추가 👆
+
     try {
       await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'userEmail': email,
-          'dtcCodes': codeString,
+          'dtcCodes': codeString,  // 이제 여기서 에러가 나지 않습니다!
           'statusMessage': _foundDTCs.isEmpty ? '차량 상태 정상' : '고장 코드 ${_foundDTCs.length}건 발견'
         }),
       );

@@ -13,6 +13,7 @@ public class DtcDictionary {
     private String description; // 뜻 (예: 공기 유량 센서 회로 이상)
 
     // Getter & Setter
+    // 🟢
     public String getCode() { return code; }
     public void setCode(String code) { this.code = code; }
     public String getDescription() { return description; }

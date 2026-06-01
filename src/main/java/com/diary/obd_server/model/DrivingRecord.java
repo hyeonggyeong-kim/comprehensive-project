@@ -19,6 +19,7 @@ public class DrivingRecord {
     private Double riskScore;
 
     // 🟢 [여기에 추가됨!] 연비 등급 라벨 저장 (예: "안전 (Eco)")
+    // 🟢
     private String riskLabel;
 
     @Column(columnDefinition = "LONGTEXT")

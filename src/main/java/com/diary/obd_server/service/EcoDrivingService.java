@@ -21,6 +21,7 @@ public class EcoDrivingService {
             Map<String, Object> row = detailedData.get(i);
 
             // 1초 단위 기본 점수 100점에서 시작 (감점/가점제)
+            // 🟢
             double currentSecondScore = 100.0;
 
             double speed = toDouble(row.get("speed"));
