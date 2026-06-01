@@ -19,7 +19,7 @@ class _EcoDrivingScreenState extends State<EcoDrivingScreen> {
   double _averageEcoScore = 0.0;
 
   // 💡 본인의 서버 IP로 확인 (기존 화면들과 동일하게 맞추세요)
-  final String myIpAddress = '172.16.38.86';
+  final String myIpAddress = '172.30.1.99';
 
   @override
   void initState() {

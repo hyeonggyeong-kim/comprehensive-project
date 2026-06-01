@@ -9,6 +9,7 @@ import 'login.dart';
 import 'diagnostic.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'eco_driving_screen.dart';
+import 'driving_report.dart';
 
 
 void main() => runApp(const OBDApp());
@@ -140,11 +141,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         MaterialPageRoute(builder: (context) => const EcoDrivingScreen())
                     );
                   }),
-                  _buildGridItem(Icons.explore_outlined, "운전점수", () {
-                    _showToast("운전점수");
-                  }),
                   _buildGridItem(Icons.assignment_ind_outlined, "성향리포트", () {
-                    _showToast("성향리포트");
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const DrivingReportScreen()));
                   }),
                 ],
               ),
@@ -241,6 +239,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> _drivingLogs = [];
   DateTime? _startTime;
 
+  // 시뮬레이션 모드: 'normal' / 'safe' / 'aggressive'
+  String _simMode = 'normal';
+
   @override
   void initState() {
     super.initState();
@@ -275,7 +276,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double avgSpeed = totalSpeed / _drivingLogs.length;
     double avgRpm = totalRpm / _drivingLogs.length;
 
-    final String myIpAddress = '172.16.38.86'; // 🚨 본인 PC IP 확인
+    final String myIpAddress = '172.30.1.99'; // 🚨 본인 PC IP 확인
     final url = Uri.parse('http://$myIpAddress:8080/api/driving/save');
 
     try {
@@ -455,17 +456,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _dataBuffer = "";
   }
 
+  void _setSimValues(int tick) {
+    if (_simMode == 'aggressive') {
+      // 난폭운전: 고속, 고RPM, 급격한 변화
+      speed    = 100 + (tick % 40).toDouble();
+      rpm      = 4000 + (tick % 2000).toDouble();
+      throttle = 80 + (tick % 20).toDouble();
+      maf      = 20 + (tick % 10).toDouble();
+    } else if (_simMode == 'safe') {
+      // 안전운전: 저속, 저RPM, 안정적
+      speed    = 30 + (tick % 10).toDouble();
+      rpm      = 1000 + (tick % 200).toDouble();
+      throttle = 10 + (tick % 5).toDouble();
+      maf      = 3 + (tick % 2).toDouble();
+    } else {
+      // 보통운전
+      speed    = 50 + (tick % 20).toDouble();
+      rpm      = 1800 + (tick % 400).toDouble();
+      throttle = 20 + (tick % 10).toDouble();
+      maf      = 7 + (tick % 5).toDouble();
+    }
+    coolant   = 85;
+    fuelLevel = 60.5;
+    voltage   = 13.8;
+  }
+
   void _initSimulation() {
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       setState(() {
-        speed = 40 + (t.tick % 30).toDouble();
-        rpm = 1500 + (t.tick % 500).toDouble();
-        coolant = 85;
-        // 시뮬레이션에서도 가짜 데이터를 조금씩 변경해 줍니다.
-        throttle = 15 + (t.tick % 10).toDouble();
-        maf = 5 + (t.tick % 5).toDouble();
-        fuelLevel = 60.5;
-        voltage = 13.8;
+        _setSimValues(t.tick);
       });
 
       if (_isRecording) {
@@ -504,6 +523,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  Widget _buildSimBtn(String label, String mode, Color color) {
+    final bool selected = _simMode == mode;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+      child: ElevatedButton(
+        onPressed: () => setState(() => _simMode = mode),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: selected ? color : Colors.grey.shade200,
+          foregroundColor: selected ? Colors.white : Colors.black54,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          minimumSize: const Size(0, 32),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: selected ? 3 : 0,
+        ),
+        child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
   @override
   void dispose() { _timer?.cancel(); _valueSubscription?.cancel(); super.dispose(); }
 
@@ -516,6 +554,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: Colors.white,
         elevation: 1,
         iconTheme: const IconThemeData(color: Colors.black),
+        actions: widget.device == null ? [
+          // 시뮬레이션 모드 선택 버튼 (테스트 대시보드일 때만 표시)
+          _buildSimBtn('안전', 'safe', Colors.green),
+          _buildSimBtn('보통', 'normal', Colors.orange),
+          _buildSimBtn('난폭', 'aggressive', Colors.red),
+          const SizedBox(width: 8),
+        ] : null,
       ),
       body: Column(
         children: [

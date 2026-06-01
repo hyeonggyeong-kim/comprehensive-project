@@ -13,7 +13,7 @@ class DrivingReportScreen extends StatefulWidget {
 class _DrivingReportScreenState extends State<DrivingReportScreen> {
   List<dynamic> _historyList = [];
   bool _isLoading = true;
-  final String myIpAddress = '172.30.1.15';
+  final String myIpAddress = '172.30.1.99';
 
   // 분석 결과
   double _avgScore = 0;

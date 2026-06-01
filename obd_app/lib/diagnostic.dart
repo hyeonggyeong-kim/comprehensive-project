@@ -82,7 +82,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
     final String? email = prefs.getString('userEmail');
     if (email == null) return;
 
-    final String myIpAddress = '192.168.0.22'; // 핫스팟 IP 적용
+    final String myIpAddress = '172.30.1.99'; // 핫스팟 IP 적용
     final url = Uri.parse('http://$myIpAddress:8080/api/diagnostics/save');
 
     // 👇 여기부터 👇 (이 부분이 병합 중에 빠졌습니다!)
