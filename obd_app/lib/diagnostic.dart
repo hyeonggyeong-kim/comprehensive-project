@@ -79,12 +79,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
     final String? email = prefs.getString('userEmail');
     if (email == null) return;
 
+    final String myIpAddress = '192.168.0.22'; // 핫스팟 IP 적용
     final url = Uri.parse('http://$myIpAddress:8080/api/diagnostics/save');
-
-    // DB에 저장할 때는 코드 번호들만 콤마로 묶어서(예: P0113,P0420) 보냅니다.
-    String codeString = _foundDTCs.isEmpty
-        ? '정상'
-        : _foundDTCs.map((item) => item['code']).join(',');
 
     try {
       await http.post(
