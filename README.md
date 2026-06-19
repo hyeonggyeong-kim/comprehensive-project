@@ -132,6 +132,6 @@ LightGBM 기준 주요 피처 중요도
 
 > **LightGBM** 선정 (MAE: 0.6558 / R²: 0.9824)
 
-- Transformer가 초기 비교에서 MAE 소폭 우세했으나, 하이퍼파라미터 튜닝 후 LightGBM이 역전
+- Transformer가 초기 비교에서 MAE 소폭 우세했으나, 하이퍼파라미터 튜닝 후 LightGBM을 선정
 - 실시간 추론 적합성 및 경량화 측면에서 LightGBM이 모바일 환경에 유리
 - 교차검증 결과 안정적인 일반화 성능 확인
